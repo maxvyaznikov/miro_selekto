@@ -3,9 +3,31 @@
 <head>
   <script src="https://miro.com/app/static/sdk.1.1.js"></script>
   <script>
+    let isPluginActive = false;
     miro.onReady(() => {
-        miro.addListener(miro.enums.event.SELECTION_UPDATED, onSelectionUpdate)
-        onSelectionUpdate()
+        miro.initialize({
+          extensionPoints: {
+            bottomBar: {
+              title: 'Selekto',
+              svgIcon:
+                '<circle cx="12" cy="12" r="9" fill="none" fill-rule="evenodd" stroke="currentColor" stroke-width="2"/>',
+              positionPriority: 1,
+              onClick: async () => {
+                isPluginActive = !isPluginActive;
+                if (isPluginActive) {
+                  miro.addListener(miro.enums.event.SELECTION_UPDATED, onSelectionUpdate)
+                  await onSelectionUpdate()
+                  miro.showNotification('Selekto switched ON')
+                } else {
+                  miro.removeListener(miro.enums.event.SELECTION_UPDATED, onSelectionUpdate)
+                  await clearHighlighted()
+                  miro.showNotification('Selekto switched OFF')
+                }
+              },
+            },
+          }
+        })
+        clearHighlighted()
     })
 
     async function onSelectionUpdate() {
@@ -15,14 +37,14 @@
 
     async function clearHighlighted() {
         const appId = await miro.getClientId()
-        let objs = await miro.board.widgets.get({type: "line"})
+        let lines = await miro.board.widgets.get({type: "line"})
         let changes = [];
-        objs.forEach(o => {
-            if (typeof o.metadata[appId] !== 'undefined'
-                    && typeof o.metadata[appId].prevLineColor !== 'undefined') {
+        lines.forEach(line => {
+            if (typeof line.metadata[appId] !== 'undefined'
+                    && typeof line.metadata[appId].prevLineColor !== 'undefined') {
                 changes.push({
-                    id: o.id,
-                    style: { lineColor: o.metadata[appId].prevLineColor },
+                    id: line.id,
+                    style: { lineColor: line.metadata[appId].prevLineColor },
                     metadata: { [appId]: {} }
                 })
             }
@@ -39,10 +61,15 @@
           lines = lines.concat(await miro.board.widgets.get({type: "line", startWidgetId: sticker.id}))
 
           let changes = lines.map((line) => {
+              let originColor = line.style.lineColor;
+              if (typeof line.metadata[appId] !== 'undefined'
+                      && typeof line.metadata[appId].prevLineColor !== 'undefined') {
+                    originColor = line.metadata[appId].prevLineColor
+              }
               return {
                   id: line.id,
                   style: { lineColor: sticker.style.stickerBackgroundColor },
-                  metadata: { [appId]: { prevLineColor: line.style.lineColor } }
+                  metadata: { [appId]: { prevLineColor: originColor } }
               }
           })
           await miro.board.widgets.update(changes)
