@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="https://miro.com/app/static/sdk.1.1.js"></script>
+  <script>
+    miro.onReady(() => {
+        miro.addListener(miro.enums.event.SELECTION_UPDATED, onSelectionUpdate)
+        onSelectionUpdate()
+    })
+
+    async function onSelectionUpdate() {
+        await clearHighlighted();
+        await highlightSelected();
+    }
+
+    async function clearHighlighted() {
+        const appId = await miro.getClientId()
+        let objs = await miro.board.widgets.get({type: "line"})
+        let changes = [];
+        objs.forEach(o => {
+            if (typeof o.metadata[appId] !== 'undefined'
+                    && typeof o.metadata[appId].prevLineColor !== 'undefined') {
+                changes.push({
+                    id: o.id,
+                    style: { lineColor: o.metadata[appId].prevLineColor },
+                    metadata: { [appId]: {} }
+                })
+            }
+        })
+        await miro.board.widgets.update(changes)
+    }
+
+    async function highlightSelected() {
+      const appId = await miro.getClientId()
+      let stickers = await miro.board.selection.get({type: "sticker"})
+      if (stickers.length > 0) {
+          let sticker = stickers[0];
+          let lines = await miro.board.widgets.get({type: "line", endWidgetId: sticker.id})
+          lines = lines.concat(await miro.board.widgets.get({type: "line", startWidgetId: sticker.id}))
+
+          let changes = lines.map((line) => {
+              return {
+                  id: line.id,
+                  style: { lineColor: sticker.style.stickerBackgroundColor },
+                  metadata: { [appId]: { prevLineColor: line.style.lineColor } }
+              }
+          })
+          await miro.board.widgets.update(changes)
+      }
+    }
+  </script>
+</head>
+</html>
